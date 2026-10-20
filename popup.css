@@ -1,0 +1,154 @@
+/* popup.css: styles for the toolbar popup */
+
+/* Colors live in variables so dark mode only has to override them */
+:root {
+  --bg: #ffffff;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --border: #d1d5db;
+  --input-bg: #f9fafb;
+  --accent: #6d28d9;
+  --accent-hover: #5b21b6;
+  --accent-text: #ffffff;
+  --link: #6d28d9;
+  --ok: #047857;
+  --error: #b91c1c;
+  --shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17181c;
+    --text: #f3f4f6;
+    --muted: #9ca3af;
+    --border: #374151;
+    --input-bg: #1f2128;
+    --accent: #7c3aed;
+    --accent-hover: #8b5cf6;
+    --link: #c4b5fd;
+    --ok: #34d399;
+    --error: #f87171;
+    --shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 320px;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.card {
+  padding: 20px;
+}
+
+h1 {
+  margin: 0 0 4px;
+  font-size: 22px;
+}
+
+.subtitle {
+  margin: 0 0 16px;
+  color: var(--muted);
+}
+
+/* Fun level row */
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  font-weight: 600;
+}
+
+select {
+  padding: 8px 10px;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Input + button */
+input[type="password"] {
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+input[type="password"]:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+button {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--accent);
+  color: var(--accent-text);
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: background-color 0.15s ease;
+}
+
+button:hover {
+  background: var(--accent-hover);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Status line: color changes with the state set in popup.js */
+.status {
+  margin: 12px 0 0;
+  font-weight: 600;
+  color: var(--muted);
+}
+.status.ok    { color: var(--ok); }
+.status.error { color: var(--error); }
+
+.hint {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.hint a {
+  color: var(--link);
+}
+
+/* Hidden visually but still read by screen readers */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Humanify</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <main class="card">
+    <h1>Humanify ✨</h1>
+    <p class="subtitle">Make any essay sound human and fun.</p>
+
+    <!-- How jokey the rewrite should be (saved as soon as you change it) -->
+    <div class="row">
+      <label for="funLevel">Fun level</label>
+      <select id="funLevel">
+        <option value="subtle">Subtle</option>
+        <option value="funny">Funny</option>
+        <option value="max">Maximum chaos</option>
+      </select>
+    </div>
+
+    <!-- A form lets people press Enter to save -->
+    <form id="keyForm">
+      <label for="apiKey" class="visually-hidden">API key</label>
+      <input type="password" id="apiKey" placeholder="AIza...  or  gsk_...  or  sk-..." autocomplete="off" spellcheck="false" />
+      <button type="submit">Save Key</button>
+    </form>
+
+    <!-- Updated by popup.js -->
+    <p id="status" class="status" role="status">No key set</p>
+
+    <p class="hint">
+      Free key: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a> (Gemini)
+      or <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">console.groq.com/keys</a> (Groq).
+      OpenAI keys also work.
+    </p>
+  </main>
+
+  <!-- Manifest V3 doesn't allow inline scripts, so the script is a separate file -->
+  <script src="popup.js"></script>
+</body>
+</html>
