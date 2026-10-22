@@ -1,65 +1,63 @@
 # Humanify ✨
 
-A Chrome extension that rewrites any text you select so it sounds more human and fun. It works with a free Google Gemini or Groq key, or a paid OpenAI key.
+So, I built a Chrome extension! It takes whatever text you highlight on a webpage and rewrites it so it sounds a bit more human (and a lot more fun). 
 
-## Install
+It works out of the box with a free Google Gemini or Groq API key, but you can also plug in a paid OpenAI key if you prefer.
 
-1. Download or clone this folder.
-2. Open `chrome://extensions` in Chrome.
-3. Turn on **Developer mode** (top right).
-4. Click **Load unpacked** and select the `humanify` folder (the one containing `manifest.json`).
-5. Optional: pin Humanify from the puzzle-piece menu.
+## How to install it
 
-The `icons/` folder has simple placeholder icons. Replace `16.png`, `48.png` and `128.png` with your own at any time (keep the same file names).
+Since it's not on the Chrome Web Store (yet), you have to load it manually. Don't worry, it takes like 30 seconds:
 
-## Get an API key
+1. Download or clone this repo to your computer.
+2. Open Chrome and type `chrome://extensions` in the URL bar.
+3. Flip on the **Developer mode** toggle in the top right corner.
+4. Click **Load unpacked** and select the `humanify` folder (make sure it's the one with the `manifest.json` inside).
+5. *Optional but recommended:* Click the puzzle piece icon in Chrome and pin Humanify so it's always visible.
 
-Humanify works out which service to use from the start of your key.
+**A quick note on the icons:** The `icons/` folder just has some basic placeholder images right now. Feel free to swap `16.png`, `48.png`, and `128.png` with your own art (just keep the file names the same so the code doesn't break).
 
-| Service | Cost | Key starts with | Get it at |
+## You'll need an API key
+
+The extension is smart—it looks at the start of your API key to figure out which service to use. 
+
+| Service | Cost | Starts with | Grab a key here |
 |---|---|---|---|
-| Google Gemini | Free tier, no card | `AIza` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| Google Gemini | Free tier (no card needed) | `AIza` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
 | Groq | Free tier | `gsk_` | [console.groq.com/keys](https://console.groq.com/keys) |
-| OpenAI | Paid (prepaid credit) | `sk-` | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
+| OpenAI | Paid (prepaid) | `sk-` | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
 
-Then click the Humanify icon, paste the key and press **Save Key**. The key is stored only in your browser (`chrome.storage.local`) and is sent only to the matching service.
+Once you have a key, click the Humanify icon in your toolbar, paste the key in, and hit **Save Key**. 
 
-## How to use
+**Privacy note:** Your key is saved completely locally in your browser (`chrome.storage.local`). It gets sent only to the service you're using to generate the text.
 
-1. Select some text on a page, in a text box, or in an editor.
-2. Right-click and choose **✨ Make it Human**.
-3. Wait a moment while the badge shows "Humanifying...". The text is replaced when it's done.
+## How to use it
 
-Notes:
-- In text boxes and editors (textarea, input, Gmail compose and similar), the replacement is real and you can undo it with `Ctrl+Z`.
-- On regular web pages the replacement is visual only. It disappears when you reload.
-- Selections over 4000 characters: the first 4000 are rewritten and the rest is left as it was.
-- Chrome doesn't allow extensions on `chrome://` pages, the Chrome Web Store, or some PDF viewers. If you right-click there, the toolbar icon shows a red `!`.
-- To use it on local `file://` pages, open `chrome://extensions`, click **Details** on Humanify, and turn on **Allow access to file URLs**.
+1. Highlight some text on a webpage, inside a text box, or in an editor.
+2. Right-click and hit **✨ Make it Human**.
+3. The extension badge will show "Humanifying..." for a second. Once it's done, your text is replaced.
 
-## Cost and privacy
+**Some heads-up:**
+* **In text boxes (Gmail, Twitter, etc.):** The replacement is real. If you hate it, just hit `Ctrl+Z` to undo.
+* **On normal web pages:** The replacement is just visual. If you reload the page, the original text comes back.
+* **Long text:** If you highlight more than 4000 characters, it'll rewrite the first 4000 and leave the rest alone.
+* **Where it won't work:** Chrome blocks extensions on `chrome://` pages, the Web Store, and some PDF viewers. If you try to right-click there, the extension icon will show a red `!`.
+* **Local files:** Want to use it on a local `file://` page? Go to `chrome://extensions`, click **Details** on Humanify, and enable **Allow access to file URLs**.
 
-Gemini and Groq have free tiers with daily limits, which is plenty for personal use. If you hit a limit, wait and try again. Free-tier limits and terms change, so check the provider's site. OpenAI charges a fraction of a cent per rewrite.
+## Privacy & Cost
 
-Your selected text is sent to the service that owns your key, so don't use it on anything confidential. Free tiers may use submitted text to improve their products.
+Gemini and Groq have really generous free tiers that are honestly more than enough for personal use. If you hit a rate limit, just wait a bit and try again. OpenAI charges a tiny fraction of a cent per rewrite.
 
-## Customize the fun level
+**Just a warning:** Your text gets sent to the API provider, so don't use this on anything confidential (like passwords or sensitive work docs). Also, remember that free tiers sometimes use your text to train their models.
 
-Open `background.js` and edit the settings in section 3:
+## Tweak the chaos level
 
-- **`TEMPERATURE`** (default `0.9`): raise it toward `1.2` for wilder, more playful rewrites, or lower it toward `0.5` for safer, more faithful ones.
-- **`SYSTEM_PROMPT`**: the editing instructions sent to the model. Rule 4 controls how much humor gets added.
-- **`PROVIDERS`**: the model name used for each service. If a model is retired and you see a "model not found" error, replace the name with a current one from the provider's docs.
+In the extension popup, you can choose your vibe: **Subtle**, **Funny**, or **Maximum chaos**. It saves your choice automatically.
 
-Open `content.js` to change `MAX_CHARS`, the longest selection that is rewritten in one go.
+If you want to dig into the code and mess around, open up `background.js` and look at section 3:
+* **`TEMPERATURE`** (default is `0.9`): Crank this up toward `1.2` if you want the AI to go completely off the rails. Lower it toward `0.5` if you want safer, more predictable edits.
+* **`FUN_RULES`**: These are the actual instructions sent to the AI. Rule 4 is where the humor lives—tweak it to change the vibe.
+* **`PROVIDERS`**: This is the list of AI models it tries, in order. If a model gets retired or your account gets rate-limited, it just moves to the next one. You can add new models here whenever they drop.
 
-After editing any file, go to `chrome://extensions` and click the reload icon on Humanify, then refresh the page you're testing on.
+If you want to change the 4000-character limit, that's in `content.js` (`MAX_CHARS`).
 
-## Files
-
-| File | Job |
-|---|---|
-| `manifest.json` | Extension settings and permissions |
-| `background.js` | Right-click menu, and the call to the AI service |
-| `content.js` | Reads and replaces the selected text, shows the badge and toasts |
-| `popup.html` / `popup.css` / `popup.js` | The API key popup |
+**Don't forget:** If you edit any of the code, you have to go back to `chrome://extensions`, click the little reload icon on the Humanify card, and refresh the page you're testing on.
