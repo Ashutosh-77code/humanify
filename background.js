@@ -1,9 +1,4 @@
-// background.js
-// The service worker. It has two jobs:
-//   1. Own the right-click menu and hand the selected text to content.js.
-//   2. Talk to the AI service (Gemini, Groq or OpenAI) on content.js's behalf.
-//      Doing the network call here avoids browser CORS limits on web pages
-//      and keeps your API key out of the page itself.
+
 
 const MENU_ID = "humanify-rewrite";
 
@@ -76,8 +71,17 @@ function showPageError(reason) {
 // ===============================================================
 // 3. AI SETTINGS (edit these to customize Humanify)
 // ===============================================================
-const TEMPERATURE = 1.0;          // higher = more playful, lower = more careful
-const MAX_TOKENS = 1500;          // max length of the rewritten text
+// Temperature per Fun level (higher = looser and more surprising).
+const TEMPERATURES = { subtle: 0.8, funny: 0.9, max: 1.0 };
+const DEFAULT_LEVEL = "funny";
+// Self-critique: the model writes CANDIDATES versions, scores each for how human
+// and quirky it sounds, and only the highest-scoring one is returned.
+// It is still ONE request, but the reply is about 3x longer. Set to false to skip it.
+const SELF_CRITIQUE = true;
+const CANDIDATES = 3;
+// Remove any em-dashes and semicolons the model still sneaks in.
+const SCRUB_PUNCTUATION = true;
+const MAX_TOKENS = 1500;          // max length of ONE rewritten version
 const REQUEST_TIMEOUT_MS = 60000; // give up after 60 seconds
 
 // Which service is used is detected from the start of your API key:
@@ -113,27 +117,66 @@ const PROVIDERS = {
   }
 };
 
-// The instructions we give the model. Rule 4 changes with the "Fun level"
-// you pick in the popup. Edit the text below to change the style.
-const FUN_RULES = {
-  subtle:
-    "4. Add ONE tasteful touch of fun: a light metaphor, a witty aside, or a relatable comparison — but never at the expense of clarity or the original argument.",
-  funny:
-    "4. Make it genuinely funny. Put at least one real joke, witty aside, or playful comparison in every paragraph. Write like a smart, slightly sarcastic friend explaining this over coffee: use contractions, an occasional sentence fragment, and talk to the reader directly now and then. Aim the jokes at the subject, not at the reader. Never change a fact or invent one for a punchline.",
-  max:
-    "4. Go all in on comedy. Every paragraph gets a joke, and the funniest paragraphs get two. Use deadpan understatement, absurd-but-accurate comparisons, mock-dramatic asides, and the odd running gag. Keep a casual voice with contractions and short punchy fragments. Stay accurate: never change a fact or invent one for a punchline."
-};
+// The instructions we give the model. Edit the text below to change the style.
+const BASE_PROMPT = `You are a human editor with a dry, slightly chaotic sense of humor. Your goal is to rewrite the provided text so it sounds like a real person typed it quickly, completely avoiding the statistical fingerprints of AI (high burstiness, no AI vocabulary). 
+
+Follow these rules strictly for all modes:
+1. RHYTHM: Mix very short sentences (2-4 words) with longer, slightly rambling ones. Use sentence fragments. Never write sentences of similar length.
+2. VOCABULARY: Never use words like delve, testament, seamless, unlock, landscape, foster, comprehensive, pivotal, or vibrant. Remove all em-dashes (—) and semicolons (;).
+3. SPECIFICITY: Do not use generic examples. Use absurdly specific numbers (e.g., "80,373" instead of "a lot") and end sentences on hard consonants.
+
+MODE INSTRUCTIONS:
+- SUBTLE: Just fix the rhythm and vocabulary. Make it sound like a smart human wrote it. Do not add jokes.
+- FUNNY: Apply the "Misplaced Focus" filter. Describe a tiny, irrelevant detail of the text with intense seriousness. Do not write traditional setup-punchline jokes (no Dad jokes). Make a weird, specific observation.
+- TOTAL CHAOS: Make it feel like a human brain getting distracted. Add a sudden parenthetical tangent, shift the tone randomly (e.g., from serious to "anyway, I'm hungry"), and use a strategic run-on sentence. It must feel messy, not random.`;
+
+// The popup stores "subtle", "funny" or "max". This is the name used in the prompt.
+const MODE_NAMES = { subtle: "SUBTLE", funny: "FUNNY", max: "TOTAL CHAOS" };
+
+// Added after the prompt: which mode to use, and how to format the reply.
+const KEEP_FACTS = "Keep any real names, dates, quotes and figures that the original text already states.";
+const SINGLE_FORMAT =
+  "Output only the rewritten text, with no preamble and no explanations. " + KEEP_FACTS;
+const CRITIQUE_FORMAT =
+  "Write " + CANDIDATES + " different rewrites of the user's text in the selected mode. Then score each one " +
+  "from 1 to 10 for how human and quirky it sounds (uneven rhythm, specific details, no AI vocabulary). " +
+  "Reply in exactly this format and nothing else:\n" +
+  Array.from({ length: CANDIDATES }, (_, i) =>
+    "===OPTION " + (i + 1) + " | SCORE: <number>===\n<rewrite " + (i + 1) + ">").join("\n") +
+  "\n" + KEEP_FACTS;
 
 function buildSystemPrompt(level) {
-  const rule4 = FUN_RULES[level] || FUN_RULES.funny;
-  return `You are a writing editor who removes AI-generated writing patterns and makes text sound natural, human, and genuinely fun to read.
-RULES:
+  const mode = MODE_NAMES[level] || MODE_NAMES[DEFAULT_LEVEL];
+  return BASE_PROMPT +
+    "\n\nSELECTED MODE: " + mode + ". Follow only that mode's instructions.\n\n" +
+    (SELF_CRITIQUE ? CRITIQUE_FORMAT : SINGLE_FORMAT);
+}
 
-1. Remove ALL AI writing tells: inflated vocabulary (delve, leverage, pivotal, tapestry, testament, underscore, showcase, vibrant, crucial, foster, garner, interplay, intricate), em-dash overuse, rule-of-three lists, "not only...but also", "it's not just about...it's", generic positive conclusions, filler phrases ("it's worth noting", "in today's rapidly evolving landscape"), sycophantic openers ("Great question!"), and vague attributions.
-2. Use plain copulas: say "is/are/has" instead of "serves as/stands as/boasts/features".
-3. Vary sentence length: mix short punchy sentences with occasional longer ones. Break uniformity.
-` + rule4 + `\n` + `5. Preserve the original meaning, key facts, and argument structure. Do NOT add new claims.
-6. Output ONLY the rewritten text. No preamble, no "Here's the rewritten version", no explanations.`;
+// From a self-critique reply, return the text of the highest-scoring option.
+// If the model ignored the format, the whole reply is used instead.
+function pickBestOption(output) {
+  const header = /^[ \t]*={3}[ \t]*OPTION[ \t]*(\d+)[^\n=]*?SCORE:[ \t]*([\d.]+)[^\n=]*={3}[ \t]*$/gim;
+  const marks = Array.from(output.matchAll(header));
+  if (marks.length === 0) return output.trim();
+
+  let best = null;
+  marks.forEach((mark, i) => {
+    const start = mark.index + mark[0].length;
+    const end = i + 1 < marks.length ? marks[i + 1].index : output.length;
+    const text = output.slice(start, end).trim();
+    const score = parseFloat(mark[2]) || 0;
+    if (text && (best === null || score > best.score)) best = { text: text, score: score };
+  });
+  return best ? best.text : output.trim();
+}
+
+// Replace em-dashes with commas and semicolons with full stops.
+function scrubPunctuation(text) {
+  return text
+    .replace(/\s*\u2014\s*/g, ", ")
+    .replace(/\s*;\s*(\S)/g, (match, next) => ". " + next.toUpperCase())
+    .replace(/\s*;\s*/g, ". ")
+    .replace(/,\s*,/g, ",");
 }
 
 // ===============================================================
@@ -165,9 +208,11 @@ async function getApiKey() {
 }
 
 // Build the URL, headers and body for one model of the chosen service.
-function buildRequest(provider, apiKey, text, model, systemPrompt) {
+function buildRequest(provider, apiKey, text, model, systemPrompt, temperature) {
   const config = PROVIDERS[provider];
-  const maxTokens = model.maxTokens || MAX_TOKENS;
+  // With self-critique the reply holds several versions, so allow more tokens.
+  const perVersion = model.maxTokens || MAX_TOKENS;
+  const maxTokens = SELF_CRITIQUE ? perVersion * CANDIDATES + 300 : perVersion;
 
   if (provider === "gemini") {
     return {
@@ -183,7 +228,7 @@ function buildRequest(provider, apiKey, text, model, systemPrompt) {
         systemInstruction: { parts: [{ text: systemPrompt }] },
         contents: [{ role: "user", parts: [{ text: text }] }],
         generationConfig: {
-          temperature: TEMPERATURE,
+          temperature: temperature,
           maxOutputTokens: maxTokens + 1000 // headroom in case the model "thinks"
         }
       }
@@ -200,7 +245,7 @@ function buildRequest(provider, apiKey, text, model, systemPrompt) {
     body: Object.assign(
       {
         model: model.id,
-        temperature: TEMPERATURE,
+        temperature: temperature,
         max_tokens: maxTokens,
         messages: [
           { role: "system", content: systemPrompt },
@@ -251,7 +296,9 @@ async function callModel(text) {
 
   // Read the fun level chosen in the popup (default: funny).
   const stored = await chrome.storage.local.get("fun_level");
-  const systemPrompt = buildSystemPrompt(stored.fun_level);
+  const level = TEMPERATURES[stored.fun_level] !== undefined ? stored.fun_level : DEFAULT_LEVEL;
+  const systemPrompt = buildSystemPrompt(level);
+  const temperature = TEMPERATURES[level];
 
   // Try each model in order. We only move on to the next model when the
   // problem is the model itself (retired, or your account can't use it).
@@ -259,7 +306,7 @@ async function callModel(text) {
   let lastError;
   for (const model of models) {
     try {
-      return await requestOnce(provider, model, apiKey, text, systemPrompt);
+      return await requestOnce(provider, model, apiKey, text, systemPrompt, temperature);
     } catch (error) {
       lastError = error;
       if (!error.modelProblem) throw error;
@@ -271,8 +318,8 @@ async function callModel(text) {
 }
 
 // One request to one model.
-async function requestOnce(provider, model, apiKey, text, systemPrompt) {
-  const request = buildRequest(provider, apiKey, text, model, systemPrompt);
+async function requestOnce(provider, model, apiKey, text, systemPrompt, temperature) {
+  const request = buildRequest(provider, apiKey, text, model, systemPrompt, temperature);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -293,7 +340,6 @@ async function requestOnce(provider, model, apiKey, text, systemPrompt) {
     clearTimeout(timer);
   }
 
-  // All three services return a JSON error body when something goes wrong.
   if (!response.ok) {
     let detail = "";
     try {
@@ -305,7 +351,7 @@ async function requestOnce(provider, model, apiKey, text, systemPrompt) {
     const failure = new Error(
       detail || PROVIDERS[provider].name + " error (HTTP " + response.status + ")"
     );
-    // Flag "this model isn't available" errors so callModel can try the next one.
+    
     failure.modelProblem =
       response.status === 404 ||
       /does not exist|do not have access|not found|decommission|deprecated|no longer supported/i.test(
@@ -318,5 +364,7 @@ async function requestOnce(provider, model, apiKey, text, systemPrompt) {
   const output = provider === "gemini" ? readGemini(data) : readOpenAIStyle(data);
 
   if (!output) throw new Error("The AI returned an empty response.");
-  return output;
+
+  const best = SELF_CRITIQUE ? pickBestOption(output) : output.trim();
+  return SCRUB_PUNCTUATION ? scrubPunctuation(best) : best;
 }
